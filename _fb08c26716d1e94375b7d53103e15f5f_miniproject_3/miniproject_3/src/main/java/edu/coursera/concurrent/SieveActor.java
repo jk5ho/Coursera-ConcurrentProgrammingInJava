@@ -2,6 +2,11 @@ package edu.coursera.concurrent;
 
 import edu.rice.pcdp.Actor;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import static edu.rice.pcdp.PCDP.finish;
+
 /**
  * An actor-based implementation of the Sieve of Eratosthenes.
  *
@@ -19,7 +24,21 @@ public final class SieveActor extends Sieve {
      */
     @Override
     public int countPrimes(final int limit) {
-        throw new UnsupportedOperationException();
+        final SieveActorActor sieveActor = new SieveActorActor(2);
+        finish(() -> {
+            for (int i = 3; i <= limit; i += 2) {
+                sieveActor.send(i);
+            }
+        });
+
+        int numPrimes = 0;
+        SieveActorActor loopActor = sieveActor;
+        while (loopActor != null) {
+            numPrimes += loopActor.localPrimes.size();
+            loopActor = loopActor.nextActor;
+        }
+
+        return numPrimes;
     }
 
     /**
@@ -27,6 +46,17 @@ public final class SieveActor extends Sieve {
      * parallel.
      */
     public static final class SieveActorActor extends Actor {
+
+        private static final int MAX_LOCAL_PRIMES = 1000;
+
+        private SieveActorActor nextActor;
+
+        private List<Integer> localPrimes = new ArrayList<>();
+
+        SieveActorActor(final int localPrime) {
+            localPrimes.add(localPrime);
+        }
+
         /**
          * Process a single message sent to this actor.
          *
@@ -36,7 +66,27 @@ public final class SieveActor extends Sieve {
          */
         @Override
         public void process(final Object msg) {
-            throw new UnsupportedOperationException();
+            final int candidate = (Integer) msg;
+            if (isLocallyPrime(candidate)) {
+                if (localPrimes.size() < MAX_LOCAL_PRIMES) {
+                    localPrimes.add(candidate);
+                } else if (nextActor == null) {
+                    nextActor = new SieveActorActor(candidate);
+                } else {
+                    nextActor.send(candidate);
+                }
+            }
+        }
+
+        private boolean isLocallyPrime(final int candidate) {
+            boolean isPrime = true;
+            for (final int loopPrime : localPrimes) {
+                if (candidate % loopPrime == 0) {
+                    isPrime = false;
+                    break;
+                }
+            }
+            return isPrime;
         }
     }
 }
